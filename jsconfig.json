@@ -1,11 +1,16 @@
 {
   "compilerOptions": {
-    "module": "ES6",
     "target": "ES6",
     "checkJs": true,
+    "module": "none",
     "moduleResolution": "node",
-    "allowJs": true
+    "allowJs": true,
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "*": ["./*"]
+    }
   },
-  "exclude": ["node_modules", "**/node_modules/*"],
-  "include": ["**/*.js"]
+  "files": ["util.js", "header.js", "navigation.js", "globals.d.ts"],
+  "exclude": ["node_modules", "**/node_modules/*"]
 }

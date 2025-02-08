@@ -1,4 +1,4 @@
-//
+/// <reference path="./util.js" />
 
 const header = document.getElementById("header");
 if (!header) throw new Error("Header element not found");
@@ -70,7 +70,7 @@ window.data?.models?.forEach((provider) => {
 
     // Disable expensive models if balance < 0
     if (window.data?.sponsor?.balance) {
-      const balance = parseFloat(window.data.sponsor.balance);
+      const balance = window.data.sponsor.balance;
       if (model.completionCpm > 5 && balance < 0) {
         option.disabled = true;
       }
