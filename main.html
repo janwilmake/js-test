@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+    <link rel="manifest" href="/site.webmanifest">
+    <link rel="icon" type="image/x-icon" href="/favicon.ico">
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UIThub Chat - Context-driven LLM Interface</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+
+    <!-- Add this style block to your head section -->
+    <style>
+        /* Markdown Content Styles */
+        .message-content {
+            /* Text styles */
+            font-size: 16px;
+            line-height: 1.6;
+            color: #374151;
+        }
+
+        .message-content h1 {
+            font-size: 2em;
+            font-weight: bold;
+            margin: 1em 0 0.5em;
+        }
+
+        .message-content h2 {
+            font-size: 1.5em;
+            font-weight: bold;
+            margin: 1em 0 0.5em;
+        }
+
+        .message-content h3 {
+            font-size: 1.25em;
+            font-weight: bold;
+            margin: 1em 0 0.5em;
+        }
+
+        .message-content p {
+            margin: 1em 0;
+        }
+
+        .message-content ul,
+        .message-content ol {
+            margin: 1em 0;
+            padding-left: 2em;
+        }
+
+        .message-content ul {
+            list-style-type: disc;
+        }
+
+        .message-content ol {
+            list-style-type: decimal;
+        }
+
+        .message-content li {
+            margin: 0.5em 0;
+        }
+
+        .message-content a {
+            color: #3B82F6;
+            text-decoration: underline;
+        }
+
+        .message-content blockquote {
+            border-left: 4px solid #E5E7EB;
+            padding-left: 1em;
+            margin: 1em 0;
+            color: #6B7280;
+        }
+
+        .message-content img {
+            max-width: 100%;
+            height: auto;
+            margin: 1em 0;
+        }
+
+        .message-content hr {
+            border: 0;
+            border-top: 1px solid #E5E7EB;
+            margin: 2em 0;
+        }
+
+        .message-content table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1em 0;
+        }
+
+        .message-content th,
+        .message-content td {
+            border: 1px solid #E5E7EB;
+            padding: 0.5em;
+            text-align: left;
+        }
+
+        .message-content th {
+            background-color: #F9FAFB;
+        }
+    </style>
+    <style>
+        .drag-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(147, 51, 234, 0.5);
+            /* Light purple background */
+            border: 3px dashed rgb(147, 51, 234);
+            /* Purple dashed border */
+            pointer-events: none;
+            /* Allow events to pass through */
+            opacity: 0;
+            transition: opacity 0.2s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .drag-overlay.active {
+            opacity: 1;
+        }
+
+        .drag-overlay-text {
+            font-size: 24px;
+            color: #FFF;
+            font-weight: 500;
+        }
+
+        /* Base styles remain the same */
+        .message-content pre {
+            padding: 1rem;
+            border-radius: 0.25rem;
+            margin-top: 0.5rem;
+            margin-bottom: 0.5rem;
+            overflow-x: auto;
+        }
+
+        .message-content code {
+            font-size: 0.875rem;
+        }
+
+        .copy-btn,
+        .link-btn {
+            position: absolute;
+            top: 0.5rem;
+            padding: 0.25rem;
+            border-radius: 0.25rem;
+            opacity: 0.5;
+            transition-property: opacity;
+            transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+            transition-duration: 150ms;
+        }
+
+        .copy-btn {
+            right: 0.5rem;
+            z-index: 1000;
+            background-color: white;
+        }
+
+        .link-btn {
+            right: 2.5rem;
+            z-index: 1000;
+            background-color: white;
+        }
+
+        .copy-btn:hover,
+        .link-btn:hover {
+            background-color: rgb(229 231 235);
+        }
+
+        .think-container {
+            background-color: rgb(243 244 246);
+            padding: 0.5rem;
+            border-radius: 0.25rem;
+            margin: 0.5rem 0;
+            cursor: pointer;
+        }
+
+        .think-content {
+            margin-top: 0.5rem;
+            color: #AAA
+        }
+
+        /* Dark mode using invert */
+        @media (prefers-color-scheme: dark) {
+            html {
+                filter: invert(1) hue-rotate(180deg);
+            }
+
+            /* Prevent images and videos from being inverted */
+            img,
+            video {
+                filter: invert(1) hue-rotate(180deg);
+            }
+        }
+    </style>
+    <script>
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        marked.setOptions({
+            highlight: function (code, lang) {
+                return hljs.highlightAuto(code).value;
+            },
+            breaks: true,
+            renderer: new marked.Renderer()
+        });
+        const renderer = new marked.Renderer();
+        let codeBlockIndex = 0;
+
+        renderer.code = function ({ lang, raw, text }) {
+            const index = codeBlockIndex++;
+            const escapedCode = escapeHtml(text);
+
+            return `
+        <div class="relative pt-4 -pr-2">
+            <button onclick="copyCodeBlock(this)" class="copy-btn">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                        d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
+                    </path>
+                </svg>
+            </button>
+            <a href="codeblock/${index}.${lang || 'txt'}" class="link-btn">
+                <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                        d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                </svg>
+            </a>
+
+            <pre style="white-space: pre-wrap; word-wrap: break-word;"><code class="language-${lang || 'plaintext'}">${escapedCode}</code></pre>
+            
+        </div>
+    `;
+        };
+
+        marked.setOptions({ renderer });
+
+        function copyCodeBlock(button) {
+            const codeElement = button.parentElement.querySelector('code');
+            const content = codeElement.textContent;
+            navigator.clipboard.writeText(content);
+            showCopiedFeedback(button);
+        }
+
+    </script>
+</head>
+
+<body class="bg-gray-50">
+    <div id="dragOverlay" class="drag-overlay">
+        <div class="drag-overlay-text">Drop to import link</div>
+    </div>
+    <div class="flex h-screen">
+        <!-- Left Navigation -->
+        <div class="max-md:hidden w-1/4 bg-white border-r border-gray-200 flex flex-col dark-invert">
+            <div class="p-4 border-b border-gray-200">
+                <button id="add-context"
+                    class="w-full bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded hover:opacity-90 transition-opacity ">
+                    Add Context
+                </button>
+            </div>
+            <nav id="navigation" class="flex-1 overflow-y-auto p-2">
+            </nav>
+        </div>
+
+        <!-- Right Content -->
+        <div class="max-lg:w-full lg:w-3/4 flex flex-col dark-invert">
+            <div id="header">
+                <div class="flex items-center space-x-4">
+                    <a id="outlink" href="#" target="_blank" class="hidden text-gray-600 hover:text-purple-500">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path>
+                        </svg>
+                    </a>
+                </div>
+            </div>
+
+            <div class="flex border-b border-gray-200 bg-white">
+                <button onclick="switchTab('context')" id="contextTab"
+                    class="px-4 py-2 hover:bg-gray-50 focus:outline-none border-b-2 flex items-center space-x-2 border-purple-500">
+                    <span>Context</span>
+                    <span id="tokenCount" class="text-sm text-gray-500">(0)</span>
+
+
+                </button>
+
+                <button class="px-4 py-2 hover:bg-gray-50 focus:outline-none border-b-2 flex items-center space-x-2"
+                    onclick="copyContext()">
+                    <div class="text-gray-400 hover:text-purple-500">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
+                            </path>
+                        </svg>
+                    </div>
+                </button>
+
+                <a id="context-link"
+                    class="px-4 py-2 hover:bg-gray-50 focus:outline-none border-b-2 flex items-center space-x-2">
+
+                    <button class="text-gray-400 hover:text-purple-500">
+
+                        <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                        </svg>
+
+                    </button>
+                </a>
+
+                <button onclick="switchTab('chat')" id="chatTab"
+                    class="px-4 py-2 hover:bg-gray-50 focus:outline-none border-b-2">
+                    Chat
+                </button>
+
+
+                <a href="#" target="_blank" id="patch-button"
+                    class="flex flex-row items-center px-4 gap-4 py-2 hover:bg-gray-50 focus:outline-none border-b-2 hidden">Patch
+                    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16">
+                        <path
+                            d="M1.5 3.25a2.25 2.25 0 1 1 3 2.122v5.256a2.251 2.251 0 1 1-1.5 0V5.372A2.25 2.25 0 0 1 1.5 3.25Zm5.677-.177L9.573.677A.25.25 0 0 1 10 .854V2.5h1A2.5 2.5 0 0 1 13.5 5v5.628a2.251 2.251 0 1 1-1.5 0V5a1 1 0 0 0-1-1h-1v1.646a.25.25 0 0 1-.427.177L7.177 3.427a.25.25 0 0 1 0-.354ZM3.75 2.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm0 9.5a.75.75 0 1 0 0 1.5.75.75 0 0 0 0-1.5Zm8.25.75a.75.75 0 1 0 1.5 0 .75.75 0 0 0-1.5 0Z" />
+                    </svg></a>
+            </div>
+
+            <div class="flex-1 p-4 bg-gray-50">
+                <textarea disabled id="contextContent" class="w-full h-full p-4 border rounded resize-none bg-white"
+                    placeholder="Please select a context" oninput="updateTokenCount()"></textarea>
+
+                <div id="chatInterface" class="h-full flex flex-col hidden overflow-y-auto">
+                    <div id="messages" class="flex-1 overflow-y-auto max-h-[70vh] mb-4 bg-white border rounded p-4">
+                    </div>
+                    <div class="flex gap-2">
+                        <textarea id="messageInput" class="flex-1 p-2 border rounded" placeholder="Type your message..."
+                            rows="2" onkeydown="handleTextareaKey(event)"></textarea>
+                        <button onclick="sendMessage()" id="sendButton"
+                            class="bg-gradient-to-r from-purple-500 to-pink-500 text-white px-4 py-2 rounded hover:opacity-90 transition-opacity self-end">
+                            Send
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <script src="/util.js"></script>
+    <script src="/header.js"></script>
+    <script src="/navigation.js"></script>
+
+    <script>
+
+        let activeContextUrl = '';
+        let activeTab = localStorage.getItem('activeTab') || 'context';
+
+        function updateTokenCount() {
+            const text = document.getElementById('contextContent').value;
+            document.getElementById('tokenCount').textContent = `(${Math.round(text.length / 5)})`;
+        }
+
+        function copyContext() {
+            navigator.clipboard.writeText(document.getElementById('contextContent').value);
+            showCopiedFeedback(event.target);
+        }
+
+        function handleTextareaKey(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function showCopiedFeedback(button) {
+            const feedback = document.createElement('span');
+            feedback.className = 'copied-feedback';
+            feedback.textContent = 'Copied!';
+
+            const existingFeedback = button.parentElement.querySelector('.copied-feedback');
+            if (existingFeedback) {
+                existingFeedback.remove();
+            }
+
+            button.parentElement.appendChild(feedback);
+            setTimeout(() => feedback.classList.add('show'), 10);
+            setTimeout(() => {
+                feedback.classList.remove('show');
+                setTimeout(() => feedback.remove(), 300);
+            }, 1000);
+        }
+
+        function switchTab(tab) {
+            activeTab = tab;
+            localStorage.setItem('activeTab', tab);
+
+            document.getElementById('contextTab').classList[tab === 'context' ? 'add' : 'remove']('border-purple-500');
+            document.getElementById('chatTab').classList[tab === 'chat' ? 'add' : 'remove']('border-purple-500');
+
+            document.getElementById('contextContent').classList.toggle('hidden', tab !== 'context');
+            document.getElementById('chatInterface').classList.toggle('hidden', tab !== 'chat');
+        }
+
+        function setPatchlink(codeblocks) {
+            const patchButton = document.getElementById("patch-button");
+
+            if (!patchButton) {
+                return;
+            }
+
+            // If source is github repo and content contains codeblocks with path params, Topright add a PR SVG Icon with link to https://patch.uithub.com/owner/repo/patch?input=URL_TO_MARKDOWN_RESPONSE_CONTENT (or do via a fetch and redirect to the made commit/pr)
+            const { contextUrl } = parsePathname(window.location.pathname);
+
+            const pathCodeblocks = codeblocks ? codeblocks.filter(item => !!item.path) : [];
+
+            console.log({ codeblocks, pathCodeblocks, contextUrl })
+
+            if (!["https://github.com", "https://uithub.com"].find(x => contextUrl.startsWith(x)) || pathCodeblocks.length === 0) {
+                if (!patchButton.classList.contains("hidden")) {
+                    patchButton.classList.add("hidden")
+                }
+
+                return;
+            }
+
+            const [_, owner, repo, page, branch] = window.location.pathname.slice(1).split("/")
+            const chunks = window.location.href.split("/")
+            chunks.pop();
+            const contentUrl = chunks.join("/") + '/content.md';
+
+            const patchLink = `https://patch.uithub.com/${owner}/${repo}/patch/${page === "tree" ? branch : "main"}?markdown=${encodeURIComponent(contentUrl)}`;
+
+            patchButton.href = patchLink;
+            patchButton.classList.remove("hidden");
+
+        }
+        function appendMessage(role, content) {
+            // Reset code block index at the start of each message
+            codeBlockIndex = 0;
+
+            const messagesContainer = document.getElementById('messages');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `mb-2 p-2 rounded relative ${role === 'user'
+                ? 'bg-purple-100 mr-8'
+                : role === 'assistant'
+                    ? 'bg-gray-100 ml-8'
+                    : 'bg-red-100 text-center'
+                }`;
+
+            const processedContent = content
+                .replace(/<think>(.*?)<\/think>/gs, (_, p1) =>
+                    `<div class="think-container"><div class="think-content">&lt;think&gt;
+                        ${marked.parse(p1)}&lt;/think></div></div>`);
+
+            messageDiv.innerHTML = `
+        <div class="message-content">${marked.parse(processedContent)}</div>
+        <button onclick="copyMessageContent(this)" class="copy-btn">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z">
+                </path>
+            </svg>
+        </button>
+        ${role === "assistant" ? `<a href="content.md" class="link-btn">
+            <svg class="w-4 h-4" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                    d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+            </svg>
+        </a>`: ""}
+    `;
+
+            messagesContainer.appendChild(messageDiv);
+            // messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            hljs.highlightAll()
+        }
+        function copyMessageContent(button) {
+            const content = button.previousElementSibling.textContent;
+            navigator.clipboard.writeText(content);
+            showCopiedFeedback(button);
+        }
+
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            if (!message) return;
+            const parse = parsePathname(window.location.pathname);
+
+            const newPathname = createPathname({ ...parse, message, page: "result.html" })
+            window.history.pushState({}, '', newPathname);
+            appendMessage('user', message);
+            messageInput.value = '';
+
+            const loadingDiv = document.createElement('div');
+            loadingDiv.className = 'mb-2 p-2 rounded bg-gray-100 ml-8';
+            loadingDiv.innerHTML = `
+                <div class="flex items-center space-x-2">
+                    <div class="animate-spin rounded-full h-4 w-4 border-b-2 border-purple-500"></div>
+                    <span class="text-gray-600">Processing...</span>
+                </div>
+            `;
+            document.getElementById('messages').appendChild(loadingDiv);
+
+
+
+
+            try {
+                const postUrl = newPathname
+
+                const response = await fetch(postUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', }
+                });
+
+                if (response.status === 401) {
+                    localStorage.setItem('lastMessage', message);
+                    window.location.href = '/login';
+                    return;
+                }
+
+                if (response.status === 402) {
+                    loadingDiv.remove()
+
+                    appendMessage('system', 'You have spent more than $1. You need to add balance by sponsoring me');
+                    return;
+                }
+
+                if (!response.ok) {
+                    const text = await response.text();
+                    loadingDiv.remove()
+
+                    appendMessage('system', text);
+                    return;
+                }
+
+                const data = await response.json();
+                loadingDiv.remove()
+
+                appendMessage('assistant', data.choices[0].message.content);
+
+                console.log({ data })
+
+                setPatchlink(data.codeblocks);
+            } catch (error) {
+                console.error('Error:', error);
+                appendMessage('system', 'Error sending message. Please try again.');
+            }
+        }
+
+
+        window.addEventListener('DOMContentLoaded', () => {
+            switchTab(activeTab);
+            updateTokenCount();
+
+            const context = window.data.context;
+
+            if (context) {
+                const { contextUrl } = parsePathname(window.location.pathname)
+                document.getElementById('contextContent').value = context;
+
+                document.getElementById('context-link').href = contextUrl || "#";
+
+                updateTokenCount()
+            }
+
+            if (window.data.cache?.output) {
+                const prompt = window.data.cache.input.messages.find(x => x.role === "user")?.content;
+                const response = window.data.cache.output.choices[0].message.content;
+                appendMessage("user", prompt);
+                appendMessage("assistant", response);
+                setPatchlink(window.data.cache.output.codeblocks);
+            }
+            const lastMessage = localStorage.getItem('lastMessage');
+            if (lastMessage) {
+                document.getElementById("messageInput").value = lastMessage
+                localStorage.removeItem('lastMessage');
+            }
+
+            if (activeTab === "chat") {
+                document.getElementById("messageInput").focus()
+            }
+
+            document.getElementById('contextContent').addEventListener('input', updateTokenCount);
+        });
+    </script>
+
+    <script>
+        // Create overlay drag and drop handlers
+        document.addEventListener('DOMContentLoaded', () => {
+            const overlay = document.getElementById('dragOverlay');
+
+            // Prevent default drag behaviors
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                document.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            // Handle drag enter and leave
+            document.addEventListener('dragenter', () => {
+                overlay.classList.add('active');
+            }, false);
+
+            document.addEventListener('dragover', () => {
+                overlay.classList.add('active');
+            }, false);
+
+            document.addEventListener('dragleave', (e) => {
+                // Only hide overlay if we're leaving the window
+                if (!e.relatedTarget) {
+                    overlay.classList.remove('active');
+                }
+            }, false);
+
+            // Handle drop
+            document.addEventListener('drop', (e) => {
+                overlay.classList.remove('active');
+                const droppedText = e.dataTransfer.getData('text');
+                // Do your stuff
+
+
+                // Try to create a URL object to validate
+                try {
+                    const url = new URL(droppedText);
+                    // Only proceed if it's a valid URL
+                    if (url.protocol === 'http:' || url.protocol === 'https:') {
+                        window.location.href = createPathname({
+                            ...parsePathname(window.location.href),
+                            contextUrl: droppedText,
+                        });
+                    } else {
+                        console.error('Invalid URL protocol');
+                    }
+                } catch (e) {
+                    console.error('Invalid URL dropped');
+                }
+            }, false);
+        });
+    </script>
+</body>
+
+</html>
